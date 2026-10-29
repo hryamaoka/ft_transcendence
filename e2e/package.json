@@ -1,0 +1,11 @@
+{
+  "name": "werewolf-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.1"
+  }
+}

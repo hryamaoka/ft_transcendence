@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  email        String       @unique
+  name         String       @unique
+  passwordHash String
+  bio          String       @default("")
+  avatar       String?
+  createdAt    DateTime     @default(now())
+  players      GamePlayer[]
+  friends      Friendship[] @relation("owner")
+  friendOf     Friendship[] @relation("friend")
+}
+
+// One-directional: "user added friend". Removing deletes the row.
+model Friendship {
+  userId    Int
+  friendId  Int
+  createdAt DateTime @default(now())
+  user      User     @relation("owner", fields: [userId], references: [id], onDelete: Cascade)
+  friend    User     @relation("friend", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@id([userId, friendId])
+}
+
+model Game {
+  id         Int          @id @default(autoincrement())
+  roomCode   String
+  winner     String?
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+  bots       Int          @default(0)
+  players    GamePlayer[]
+}
+
+model GamePlayer {
+  id     Int     @id @default(autoincrement())
+  gameId Int
+  userId Int
+  role   String
+  alive  Boolean @default(true)
+  game   Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, userId])
+  @@index([userId])
+}

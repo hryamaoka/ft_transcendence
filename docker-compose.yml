@@ -1,0 +1,56 @@
+services:
+  app:
+    build: .
+    # tini as PID 1 passes on SIGTERM, so make down doesn't wait 10 s and kill the app
+    init: true
+    ports:
+      - "8443:8443"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    env_file: .env
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # over TCP: during first-time setup postgres runs a socket-only server the app can't reach
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # Optional: public HTTPS URL for playing together (docker compose --profile tunnel up)
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    # http2 (TCP) rather than the default QUIC (UDP), which networks such as school ones often block
+    command: tunnel --no-autoupdate --protocol http2 --url https://app:8443 --no-tls-verify
+    depends_on: [app]
+    profiles: ["tunnel"]
+
+  # Optional: end-to-end checks against the running app (make e2e)
+  e2e:
+    image: node:22
+    # the tests are copied in, so nothing (node_modules, lockfile) is written back to ./e2e
+    volumes:
+      - ./e2e:/src:ro
+    working_dir: /work
+    environment:
+      BASE: https://app:8443
+      # the app's certificate is self-signed
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+    command: sh -c "cp /src/package.json /src/*.js . && npm install --no-audit --no-fund --no-package-lock --silent && npm test"
+    depends_on: [app]
+    profiles: ["e2e"]
+
+volumes:
+  db-data:
+  uploads:
